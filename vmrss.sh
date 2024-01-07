@@ -6,58 +6,31 @@ if [ $# -eq 0 ]; then
 fi
 
 function print_vmrss() {
-    declare -a arr
-    arr=("$1" 0)
-    total=0
+    local pid=$1
+    local total=0
 
-    while [ ${#arr[@]} -gt 0 ]; do
-
-        # remove last element
-        space=${arr[${#arr[@]}-1]}
-        unset arr[${#arr[@]}-1]
-        pid=${arr[${#arr[@]}-1]}
-        unset arr[${#arr[@]}-1]
-
-        [ -d "/proc/$pid" ] || continue
-
-        GREP_OPTS=${GREP_OPTS:-"
-          --color=auto
-          --exclude-dir={.bzr,CVS,.git,.hg,.svn,.idea,.tox}
-          "}
-        mem=$(grep $GREP_OPTS VmRSS /proc/$pid/status \
-          | grep $GREP_OPTS -o '[0-9]\+' \
-          | awk '{print $1/1024}')
-        #Add decimals to total
-        total=$(echo $mem+$total | bc)
-
-        # name of process
+    while [ -d "/proc/$pid" ]; do
+        mem=$(grep --color=auto --exclude-dir={.bzr,CVS,.git,.hg,.svn,.idea,.tox} VmRSS /proc/$pid/status | grep --color=auto -o '[0-9]\+' | awk '{print $1/1024}')
+        total=$(echo "$mem + $total" | bc)
         name=$(ps -p $pid -o comm=)
 
-        printf "%${space}s%s($pid): $mem MB\n" '' "$name"
+        printf "%${space}s%s($pid): %.2f MB\n" '' "$name" "$mem"
 
-        # get children
         children=$(pgrep -P $pid)
 
-        # add children to array
         for child in $children; do
-            arr+=("$child" $((space+2)))
+            arr+=("$child" $((space + 2)))
         done
     done
-    printf "Total: $total MB\n"
+
+    printf "Total: %.2f MB\n" "$total"
 }
 
-# check VMRSS_MONITOR = 1
 if [ ! -z "$VMRSS_MONITOR" ]; then
-    while true; do
-        if ps -p $1 > /dev/null
-        then
-            print_vmrss $1
-            sleep 0.5
-        else
-            break
-        fi
+    while ps -p $1 > /dev/null; do
+        print_vmrss $1
+        sleep 0.5
     done
-    print_vmrss $1
-else
-    print_vmrss $1
 fi
+
+print_vmrss $1
